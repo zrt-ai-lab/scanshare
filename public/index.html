@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>扫享 ScanShare - 扫码文件传输</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      /* ViNote 风格配色 */
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #242424;
+      --bg-card: #1c1c1c;
+      --bg-hover: #282828;
+      
+      --text-primary: #e8e8e8;
+      --text-secondary: #a8a8a8;
+      --text-muted: #6a6a6a;
+      
+      --accent-blue: #4c8cf5;
+      --accent-blue-soft: #5a9cf7;
+      --accent-cyan: #06b6d4;
+      --accent-green: #22c55e;
+      
+      --border-primary: rgba(255, 255, 255, 0.08);
+      --border-secondary: rgba(255, 255, 255, 0.05);
+      
+      --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.15);
+      --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      
+      --border-radius: 16px;
+      --border-radius-sm: 12px;
+      --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    /* 动态光晕背景 */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at 20% 50%, rgba(76, 140, 245, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 80% 30%, rgba(6, 182, 212, 0.10) 0%, transparent 60%),
+        radial-gradient(circle at 50% 80%, rgba(34, 197, 94, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: -2;
+      animation: breathe 8s ease-in-out infinite;
+    }
+
+    /* 动态网格线条 */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(90deg, rgba(76, 140, 245, 0.03) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(76, 140, 245, 0.03) 1px, transparent 1px);
+      background-size: 100px 100px;
+      pointer-events: none;
+      z-index: -1;
+      opacity: 0.6;
+      animation: gridFlow 30s linear infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { 
+        opacity: 0.7;
+        transform: scale(1);
+      }
+      50% { 
+        opacity: 1;
+        transform: scale(1.02);
+      }
+    }
+
+    @keyframes gridFlow {
+      0% { 
+        background-position: 0 0, 0 0;
+      }
+      100% { 
+        background-position: 100px 100px, 0 100px;
+      }
+    }
+
+    .container {
+      background: rgba(28, 28, 28, 0.7);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-card);
+      padding: 30px;
+      text-align: center;
+      max-width: 1000px;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(76, 140, 245, 0.3) 50%, transparent 100%);
+    }
+
+    /* 全屏模式样式 */
+    body.fullscreen {
+      background: var(--bg-primary);
+    }
+
+    body.fullscreen .container {
+      max-width: none;
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--bg-primary);
+      box-shadow: none;
+      border: none;
+    }
+
+    body.fullscreen h1,
+    body.fullscreen .subtitle,
+    body.fullscreen .info,
+    body.fullscreen .stats,
+    body.fullscreen .refresh-btn,
+    body.fullscreen .fullscreen-btn {
+      display: none;
+    }
+
+    body.fullscreen .main-content {
+      flex: 1;
+      display: flex;
+      gap: 60px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body.fullscreen .qr-container {
+      background: transparent;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      border: none;
+    }
+
+    body.fullscreen #qrcode {
+      padding: 60px;
+      background: white;
+      border-radius: 30px;
+      box-shadow: 0 10px 50px rgba(76, 140, 245, 0.3);
+    }
+
+    body.fullscreen #qrcode img {
+      width: 60vmin;
+      height: 60vmin;
+      max-width: 600px;
+      max-height: 600px;
+    }
+
+    body.fullscreen .timer {
+      font-size: 28px;
+      padding: 18px 36px;
+      top: 30px;
+      right: 30px;
+      background: linear-gradient(135deg, rgba(76, 140, 245, 0.9) 0%, rgba(90, 156, 247, 0.9) 100%);
+    }
+
+    body.fullscreen .button-group {
+      min-width: 350px;
+      gap: 20px;
+    }
+
+    body.fullscreen .status-area {
+      background: rgba(28, 28, 28, 0.95);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-primary);
+      padding: 25px 30px;
+    }
+
+    body.fullscreen .status-row {
+      padding: 12px 0;
+    }
+
+    body.fullscreen .status-row:not(:last-child) {
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+    }
+
+    body.fullscreen .status-value {
+      font-size: 20px;
+    }
+
+    body.fullscreen .status-label {
+      font-size: 14px;
+    }
+
+    h1 {
+      background: linear-gradient(135deg, #ffffff 0%, #4c8cf5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      filter: drop-shadow(0 0 30px rgba(76, 140, 245, 0.15));
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+
+    /* 主内容区域 - 水平布局 */
+    .main-content {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .qr-container {
+      background: rgba(26, 26, 26, 0.6);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--border-radius);
+      padding: 25px;
+      position: relative;
+      box-shadow: var(--shadow-soft);
+      flex-shrink: 0;
+    }
+
+    #qrcode {
+      display: inline-block;
+      padding: 15px;
+      background: white;
+      border-radius: var(--border-radius-sm);
+      box-shadow: 0 4px 20px rgba(76, 140, 245, 0.15);
+    }
+
+    #qrcode img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .loading {
+      color: var(--accent-blue);
+      font-size: 16px;
+      padding: 40px;
+    }
+
+    .info {
+      background: rgba(26, 26, 26, 0.6);
+      backdrop-filter: blur(10px);
+      border-left: 4px solid var(--accent-blue);
+      padding: 12px;
+      border-radius: var(--border-radius-sm);
+      margin-bottom: 15px;
+      text-align: left;
+      border: 1px solid var(--border-primary);
+    }
+
+    .info p {
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin: 4px 0;
+      line-height: 1.5;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .stat-box {
+      background: rgba(26, 26, 26, 0.6);
+      backdrop-filter: blur(10px);
+      padding: 12px;
+      border-radius: var(--border-radius-sm);
+      border: 1px solid var(--border-primary);
+      transition: var(--transition);
+    }
+
+    .stat-box:hover {
+      background: rgba(32, 32, 32, 0.8);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(76, 140, 245, 0.1);
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      color: var(--accent-blue);
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    .timer {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: linear-gradient(135deg, rgba(76, 140, 245, 0.9) 0%, rgba(90, 156, 247, 0.9) 100%);
+      color: white;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 2px 8px rgba(76, 140, 245, 0.3);
+    }
+
+    /* 状态区域 */
+    .status-area {
+      background: rgba(26, 26, 26, 0.6);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-primary);
+      border-radius: var(--border-radius-sm);
+      padding: 15px;
+      margin-bottom: 15px;
+      width: 100%;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .status-row:not(:last-child) {
+      border-bottom: 1px solid var(--border-primary);
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+
+    .status-label {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-value {
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-value.waiting {
+      color: var(--text-secondary);
+    }
+
+    .status-value.success {
+      color: var(--accent-green);
+      animation: pulse 1s ease-in-out;
+    }
+
+    .status-value.connected {
+      color: var(--accent-green);
+    }
+
+    .status-value.disconnected {
+      color: #ef4444;
+    }
+
+    @keyframes pulse {
+      0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+      }
+      50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+      }
+    }
+
+    /* 按钮容器 - 垂直排列 */
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 200px;
+    }
+
+    .refresh-btn {
+      background: rgba(26, 26, 26, 0.8);
+      backdrop-filter: blur(10px);
+      color: var(--text-primary);
+      border: 1px solid var(--border-primary);
+      padding: 14px 20px;
+      border-radius: var(--border-radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .refresh-btn:hover {
+      background: rgba(32, 32, 32, 0.9);
+      border-color: var(--accent-blue);
+      transform: translateX(4px);
+      box-shadow: 0 4px 16px rgba(76, 140, 245, 0.15);
+    }
+
+    .refresh-btn:active {
+      transform: translateX(2px);
+    }
+
+    .fullscreen-btn {
+      background: rgba(26, 26, 26, 0.8);
+      backdrop-filter: blur(10px);
+      color: var(--text-primary);
+      border: 1px solid var(--border-primary);
+      padding: 14px 20px;
+      border-radius: var(--border-radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .fullscreen-btn:hover {
+      background: rgba(32, 32, 32, 0.9);
+      border-color: var(--accent-green);
+      transform: translateX(4px);
+      box-shadow: 0 4px 16px rgba(34, 197, 94, 0.15);
+    }
+
+    .fullscreen-btn:active {
+      transform: translateX(2px);
+    }
+
+    .exit-fullscreen {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(28, 28, 28, 0.95);
+      backdrop-filter: blur(20px);
+      color: var(--text-primary);
+      border: 1px solid var(--border-primary);
+      padding: 12px 24px;
+      border-radius: var(--border-radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 1000;
+      display: none;
+      transition: var(--transition);
+    }
+
+    body.fullscreen .exit-fullscreen {
+      display: block;
+    }
+
+    .exit-fullscreen:hover {
+      background: rgba(36, 36, 36, 0.95);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      box-shadow: 0 4px 16px rgba(76, 140, 245, 0.2);
+    }
+
+    /* Logo 固定在右上角 */
+    .logo-corner {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .logo-corner img {
+      height: 45px;
+      width: auto;
+      opacity: 0.85;
+      transition: all 0.4s ease;
+      filter: drop-shadow(0 2px 8px rgba(76, 140, 245, 0.2));
+    }
+
+    .logo-corner img:hover {
+      opacity: 1;
+      transform: scale(1.05);
+      filter: drop-shadow(0 4px 12px rgba(76, 140, 245, 0.3));
+    }
+
+    .logo-corner p {
+      color: var(--text-muted);
+      font-size: 10px;
+      margin: 0;
+    }
+
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .button-group {
+        width: 100%;
+        max-width: 300px;
+      }
+      
+      .container {
+        padding: 20px;
+      }
+      
+      h1 {
+        font-size: 22px;
+      }
+      
+      .logo-corner {
+        top: 10px;
+        right: 10px;
+      }
+      
+      .logo-corner img {
+        height: 35px;
+      }
+    }
+    h1 {
+      background: linear-gradient(135deg, #ffffff 0%, #4c8cf5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      filter: drop-shadow(0 0 30px rgba(76, 140, 245, 0.15));
+    }
+  </style>
+</head>
+<body>
+  <!-- Logo 固定在右上角 -->
+  <div class="logo-corner">
+    <img src="/zlab.png" alt="ZLab">
+    <p>ZLab</p>
+  </div>
+
+  <div class="container">
+    <h1>📱 扫享 ScanShare</h1>
+    <p class="subtitle">扫码即享 · 轻松传输</p>
+
+    <div class="info">
+      <p>📌 使用步骤：</p>
+      <p>1. 用手机微信扫描下方二维码</p>
+      <p>2. 在浏览器中选择要上传的文件</p>
+      <p>3. 上传完成后二维码自动刷新</p>
+    </div>
+
+    <div class="main-content">
+      <div class="qr-container">
+        <div class="timer" id="timer">5:00</div>
+        <div id="qrcode" class="loading">正在生成二维码...</div>
+      </div>
+
+      <div class="button-group">
+        <div class="status-area">
+          <div class="status-row">
+            <span class="status-label">上传状态</span>
+            <span id="uploadStatus" class="status-value waiting">💭 等待扫码</span>
+          </div>
+          <div class="status-row">
+            <span class="status-label">连接状态</span>
+            <span id="connectionStatus" class="status-value connected">🟢 已连接</span>
+          </div>
+          <div class="status-row">
+            <span class="status-label">今日上传</span>
+            <span id="totalFiles" class="status-value" style="color: var(--accent-blue);">0 个文件</span>
+          </div>
+        </div>
+        <button class="refresh-btn" onclick="refreshQR()">🔄 刷新二维码</button>
+        <button class="fullscreen-btn" onclick="toggleFullscreen()">🖥️ 全屏显示</button>
+        <button class="refresh-btn" onclick="openUploadFolder()">📁 打开文件夹</button>
+      </div>
+    </div>
+
+    <button class="exit-fullscreen" onclick="toggleFullscreen()">✕ 退出全屏</button>
+
+  </div>
+
+  <script>
+    let socket;
+    let totalUploadedFiles = 0;
+    let countdownInterval;
+    let expirationTime;
+
+    // 初始化Socket.IO连接
+    function initSocket() {
+      socket = io();
+      
+      socket.on('connect', () => {
+        const connStatus = document.getElementById('connectionStatus');
+        connStatus.textContent = '🟢 已连接';
+        connStatus.className = 'status-value connected';
+      });
+
+      socket.on('disconnect', () => {
+        const connStatus = document.getElementById('connectionStatus');
+        connStatus.textContent = '🔴 断开';
+        connStatus.className = 'status-value disconnected';
+      });
+
+      socket.on('upload-complete', (data) => {
+        totalUploadedFiles += data.fileCount;
+        document.getElementById('totalFiles').textContent = `${totalUploadedFiles} 个文件`;
+        
+        const uploadStatus = document.getElementById('uploadStatus');
+        uploadStatus.className = 'status-value success';
+        uploadStatus.textContent = `✅ 上传成功 ${data.fileCount} 个文件`;
+        
+        setTimeout(() => {
+          uploadStatus.className = 'status-value waiting';
+          uploadStatus.textContent = '💭 等待扫码';
+          generateQR();
+        }, 2000);
+      });
+    }
+
+    // 生成二维码
+    async function generateQR() {
+      try {
+        const response = await fetch('/api/generate-qr');
+        const data = await response.json();
+        
+        const qrcodeDiv = document.getElementById('qrcode');
+        qrcodeDiv.innerHTML = `<img src="${data.qrCode}" alt="QR Code">`;
+        
+        // 设置过期时间
+        expirationTime = Date.now() + (data.expiresIn * 1000);
+        startCountdown();
+        
+      } catch (error) {
+        console.error('生成二维码失败:', error);
+        document.getElementById('qrcode').innerHTML = '<p style="color: red;">生成失败，请刷新重试</p>';
+      }
+    }
+
+    // 倒计时
+    function startCountdown() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      countdownInterval = setInterval(() => {
+        const remaining = expirationTime - Date.now();
+        
+        if (remaining <= 0) {
+          clearInterval(countdownInterval);
+          document.getElementById('timer').textContent = '已过期';
+          document.getElementById('qrTimer').textContent = '已过期';
+          generateQR(); // 自动刷新
+          return;
+        }
+
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('timer').textContent = timeStr;
+      }, 1000);
+    }
+
+    // 手动刷新二维码
+    function refreshQR() {
+      generateQR();
+    }
+
+    // 切换全屏模式
+    function toggleFullscreen() {
+      document.body.classList.toggle('fullscreen');
+      
+      // 进入全屏时请求浏览器全屏API
+      if (document.body.classList.contains('fullscreen')) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(err => {
+            console.log('全屏请求失败:', err);
+          });
+        }
+      } else {
+        // 退出全屏
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(err => {
+            console.log('退出全屏失败:', err);
+          });
+        }
+      }
+    }
+
+    // 监听ESC键退出全屏
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('fullscreen')) {
+        toggleFullscreen();
+      }
+    });
+
+    // 监听浏览器全屏状态变化
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('fullscreen')) {
+        document.body.classList.remove('fullscreen');
+      }
+    });
+
+    // 打开上传文件夹
+    async function openUploadFolder() {
+      try {
+        const response = await fetch('/api/open-folder');
+        const data = await response.json();
+        
+        const uploadStatus = document.getElementById('uploadStatus');
+        const originalClass = uploadStatus.className;
+        const originalText = uploadStatus.textContent;
+        
+        if (data.success) {
+          // 文件夹已成功打开，只在状态栏显示提示
+          uploadStatus.className = 'status-value success';
+          uploadStatus.textContent = '✅ 已打开文件夹';
+          
+          setTimeout(() => {
+            uploadStatus.className = originalClass;
+            uploadStatus.textContent = originalText;
+          }, 2000);
+        } else {
+          // 失败时才弹窗提示
+          uploadStatus.className = 'status-value disconnected';
+          uploadStatus.textContent = '❌ 打开失败';
+          
+          setTimeout(() => {
+            uploadStatus.className = originalClass;
+            uploadStatus.textContent = originalText;
+          }, 2000);
+          
+          alert(`无法自动打开文件夹\n\n文件保存在：${data.path}\n\n请手动打开此文件夹`);
+        }
+      } catch (error) {
+        console.error('打开文件夹失败:', error);
+        
+        uploadStatus.className = 'status-value disconnected';
+        uploadStatus.textContent = '❌ 操作失败';
+        
+        setTimeout(() => {
+          uploadStatus.className = originalClass;
+          uploadStatus.textContent = originalText;
+        }, 2000);
+      }
+    }
+
+    // 页面加载时初始化
+    window.onload = () => {
+      initSocket();
+      generateQR();
+    };
+
+    // 页面卸载时清理
+    window.onbeforeunload = () => {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+    };
+  </script>
+</body>
+</html>

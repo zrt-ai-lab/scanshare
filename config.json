@@ -1,0 +1,7 @@
+{
+  "uploadPath": "./uploads",
+  "port": 3000,
+  "tokenExpireMinutes": 5,
+  "maxFileSize": 100,
+  "allowedFileTypes": ["*"]
+}

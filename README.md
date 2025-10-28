@@ -352,14 +352,6 @@ sudo xattr -r -d com.apple.quarantine "/Applications/扫享 ScanShare.app"
 
 ---
 
-## 📮 联系方式
-
-- 📧 Email: your.email@example.com
-- 💬 Issues: [GitHub Issues](https://github.com/zrt-ai-lab/scanshare/issues)
-- 🌐 Website: https://your-website.com
-
----
-
 <div align="center">
 
 **如果这个项目对你有帮助，请给个 ⭐️ Star 支持一下！**

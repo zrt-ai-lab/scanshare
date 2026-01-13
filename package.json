@@ -39,8 +39,7 @@
             "x64"
           ]
         }
-      ],
-      "icon": "icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -49,9 +48,7 @@
       "createStartMenuShortcut": true,
       "uninstallDisplayName": "扫享 ScanShare",
       "deleteAppDataOnUninstall": true,
-      "include": "build/installer.nsh",
-      "installerIcon": "icon.ico",
-      "uninstallerIcon": "icon.ico"
+      "include": "build/installer.nsh"
     },
     "files": [
       "**/*",

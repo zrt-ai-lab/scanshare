@@ -1,12 +1,9 @@
 const { app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
-const express = require('express');
-const http = require('http');
 
 let mainWindow;
 let tray;
-let server;
 
 // 获取本机IP地址
 function getLocalIP() {
@@ -125,7 +122,6 @@ function createTray() {
   const localIP = getLocalIP();
   
   // 获取上传文件夹路径
-  const { shell } = require('electron');
   const userDataPath = app.getPath('userData');
   const uploadsFolder = path.join(userDataPath, 'uploads');
   
@@ -193,9 +189,6 @@ app.on('ready', () => {
 app.on('window-all-closed', () => {
   // macOS 上保持应用运行
   if (process.platform !== 'darwin') {
-    if (serverProcess) {
-      serverProcess.kill();
-    }
     app.quit();
   }
 });
@@ -210,9 +203,6 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
-  if (serverProcess) {
-    serverProcess.kill();
-  }
 });
 
 // 处理未捕获的异常

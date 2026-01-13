@@ -16,13 +16,23 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // 确保上传目录存在
-// 在 Electron 打包环境中，使用 app.getPath('userData') 作为基础路径
 let uploadPath;
-if (process.type === 'renderer' || process.type === 'browser') {
-  // 在 Electron 环境中
-  const { app } = require('electron');
-  const userDataPath = app.getPath('userData');
-  uploadPath = path.join(userDataPath, 'uploads');
+
+// 检测是否在 Electron 环境中运行
+function isElectronEnvironment() {
+  return process.versions && process.versions.electron;
+}
+
+if (isElectronEnvironment()) {
+  // 在 Electron 环境中，使用 app.getPath('userData') 作为基础路径
+  try {
+    const { app } = require('electron');
+    const userDataPath = app.getPath('userData');
+    uploadPath = path.join(userDataPath, 'uploads');
+  } catch (e) {
+    // 如果获取失败，使用配置路径
+    uploadPath = path.resolve(process.cwd(), config.uploadPath);
+  }
 } else if (config.uploadPath.startsWith('./') || config.uploadPath.startsWith('../')) {
   // 相对路径，使用当前工作目录
   uploadPath = path.resolve(process.cwd(), config.uploadPath);

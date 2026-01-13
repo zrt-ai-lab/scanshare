@@ -1,6 +1,6 @@
 {
   "name": "scanshare",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "扫享 ScanShare - 扫码即享，轻松传输",
   "main": "electron-main.js",
   "scripts": {

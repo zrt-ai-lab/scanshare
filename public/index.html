@@ -765,15 +765,28 @@
 
     // 打开上传文件夹
     async function openUploadFolder() {
+      const uploadStatus = document.getElementById('uploadStatus');
+      const originalClass = uploadStatus.className;
+      const originalText = uploadStatus.textContent;
+      
       try {
-        const response = await fetch('/api/open-folder');
-        const data = await response.json();
+        let result;
         
-        const uploadStatus = document.getElementById('uploadStatus');
-        const originalClass = uploadStatus.className;
-        const originalText = uploadStatus.textContent;
+        // 优先使用 Electron API（更可靠，特别是在 Windows 上）
+        if (window.electronAPI && window.electronAPI.openFolder) {
+          // 先获取上传路径
+          let folderPath;
+          if (window.electronAPI.getUploadPath) {
+            folderPath = await window.electronAPI.getUploadPath();
+          }
+          result = await window.electronAPI.openFolder(folderPath);
+        } else {
+          // 降级到 HTTP API（用于浏览器直接访问的情况）
+          const response = await fetch('/api/open-folder');
+          result = await response.json();
+        }
         
-        if (data.success) {
+        if (result.success) {
           // 文件夹已成功打开，只在状态栏显示提示
           uploadStatus.className = 'status-value success';
           uploadStatus.textContent = '✅ 已打开文件夹';
@@ -792,7 +805,7 @@
             uploadStatus.textContent = originalText;
           }, 2000);
           
-          alert(`无法自动打开文件夹\n\n文件保存在：${data.path}\n\n请手动打开此文件夹`);
+          alert(`无法自动打开文件夹\n\n文件保存在：${result.path}\n\n错误信息：${result.error || '未知错误'}\n\n请手动打开此文件夹`);
         }
       } catch (error) {
         console.error('打开文件夹失败:', error);

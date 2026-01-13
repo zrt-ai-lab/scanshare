@@ -46,10 +46,16 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "uninstallDisplayName": "扫享 ScanShare",
+      "deleteAppDataOnUninstall": true,
+      "include": "build/installer.nsh",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico"
     },
     "files": [
       "**/*",
+      "preload.js",
       "!uploads/**/*",
       "!BUILD_MSI.md",
       "!WINDOWS_INSTALL.md",

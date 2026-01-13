@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const express = require('express');
@@ -39,13 +39,38 @@ function startServer() {
   });
 }
 
+// 获取上传文件夹路径
+function getUploadPath() {
+  const userDataPath = app.getPath('userData');
+  return path.join(userDataPath, 'uploads');
+}
+
+// IPC 处理器：打开文件夹
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    // 如果没有传入路径，使用默认上传路径
+    const targetPath = folderPath || getUploadPath();
+    const result = await shell.openPath(targetPath);
+    // shell.openPath 成功时返回空字符串，失败时返回错误信息
+    return { success: result === '', path: targetPath, error: result || null };
+  } catch (error) {
+    return { success: false, path: folderPath, error: error.message };
+  }
+});
+
+// IPC 处理器：获取上传路径
+ipcMain.handle('get-upload-path', async () => {
+  return getUploadPath();
+});
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     },
     title: 'QR File Transfer - 二维码文件传输',
     autoHideMenuBar: true
